@@ -1,0 +1,5 @@
+{
+  "name": "MINIStream",
+  "description": "A minimal web application to watch Twitch lives and VODs. Paste a link into the central bar to start watching. Features light and dark modes for a comfortable viewing experience.",
+  "requestFramePermissions": []
+}
