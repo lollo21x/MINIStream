@@ -100,20 +100,39 @@ const App: React.FC = () => {
   };
 
 
-  const handleUrlSubmit = (url: string) => {
+  const handleUrlSubmit = (input: string) => {
     setUrlError(null);
-    const extractedInfo = extractTwitchInfo(url);
-    setTwitchContent(extractedInfo);
+    const trimmedInput = input.trim();
+
+    if (!trimmedInput) {
+        setTwitchContent(null);
+        window.history.pushState({}, '', window.location.pathname);
+        return;
+    }
+
+    let extractedInfo: TwitchInfo | null = null;
     
+    // Heuristic: if it contains typical URL chars, treat as URL, otherwise treat as channel name
+    const isUrlLike = trimmedInput.includes('.') || trimmedInput.includes('/');
+
+    if (isUrlLike) {
+        extractedInfo = extractTwitchInfo(trimmedInput.startsWith('http') ? trimmedInput : `https://${trimmedInput}`);
+    } else {
+        // Twitch channel names are 4-25 chars, alphanumeric + underscore
+        if (/^[a-zA-Z0-9_]{4,25}$/.test(trimmedInput)) {
+            extractedInfo = { type: 'channel', id: trimmedInput };
+        }
+    }
+
+    setTwitchContent(extractedInfo);
+
     const urlParams = new URLSearchParams();
     if (extractedInfo) {
-      urlParams.set(extractedInfo.type, extractedInfo.id);
-      window.history.pushState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
+        urlParams.set(extractedInfo.type, extractedInfo.id);
+        window.history.pushState({}, '', `${window.location.pathname}?${urlParams.toString()}`);
     } else {
-      if(url.trim()){
-        setUrlError("Invalid Twitch URL. Please make sure it's a valid channel, VOD or clip link.");
-      }
-      window.history.pushState({}, '', window.location.pathname);
+        setUrlError("Invalid Twitch URL or channel name. Please try again.");
+        window.history.pushState({}, '', window.location.pathname);
     }
   };
   
@@ -126,10 +145,18 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 font-sans">
-      <div className="absolute top-6 right-6 flex items-center space-x-2">
+      <div className="absolute top-6 right-6 flex items-center space-x-2 z-10">
         <PlayerModeToggle playerMode={playerMode} togglePlayerMode={togglePlayerMode} disabled={twitchContent?.type === 'clip' || twitchContent?.type === 'video'}/>
         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       </div>
+      <a
+        href="http://minitube.dootinc.dpdns.org"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="fixed top-5 left-5 px-4 py-2 bg-red-600 text-white text-sm font-semibold rounded-2xl hover:bg-red-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-75 z-10"
+      >
+        Want to watch YouTube videos?
+      </a>
       <main className={`w-full flex flex-col items-center space-y-6 sm:space-y-8 ${
           playerMode === 'full' && twitchContent?.type === 'channel' ? 'max-w-7xl' : 'max-w-4xl'
         } transition-all duration-500`}>

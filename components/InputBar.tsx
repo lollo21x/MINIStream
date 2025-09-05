@@ -11,9 +11,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, onInputChange, hasError }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (url.trim()) {
-      onSubmit(url);
-    }
+    onSubmit(url);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -27,7 +25,7 @@ const InputBar: React.FC<InputBarProps> = ({ onSubmit, onInputChange, hasError }
         type="text"
         value={url}
         onChange={handleChange}
-        placeholder="Paste a Twitch link here..."
+        placeholder="Paste a Twitch link or enter a channel name..."
         className={`w-full px-4 py-3 bg-gray-100/50 dark:bg-gray-900/50 border-2 rounded-2xl text-gray-800 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 transition-all duration-300 outline-none ${
           hasError ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-purple-500'
         }`}
