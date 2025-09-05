@@ -1,8 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TwitchInfo } from '../App';
-import { Theme } from '../types';
+import { Theme, PlayerMode } from '../types';
 
-// Update global interface for the new Twitch.Embed library
 declare global {
   interface Window {
     Twitch: {
@@ -15,28 +14,27 @@ interface VideoPlayerProps {
   twitchContent: TwitchInfo | null;
   theme: Theme;
   hostname: string;
+  playerMode: PlayerMode;
 }
 
-// Use the new, more robust embed script URL
 const TWITCH_EMBED_SCRIPT_URL = 'https://embed.twitch.tv/embed/v1.js';
 
-// Helper to load the script once
 const loadTwitchEmbedScript = (): Promise<void> => {
   return new Promise((resolve, reject) => {
-    // If script is already loaded, resolve immediately
     if (window.Twitch && window.Twitch.Embed) {
       resolve();
       return;
     }
-
     const existingScript = document.querySelector(`script[src="${TWITCH_EMBED_SCRIPT_URL}"]`);
     if (existingScript) {
-        // If script is loading, wait for it to finish
-        existingScript.addEventListener('load', () => resolve());
-        existingScript.addEventListener('error', (e) => reject(e));
-        return;
+      const loadHandler = () => {
+        resolve();
+        existingScript.removeEventListener('load', loadHandler);
+      };
+      existingScript.addEventListener('load', loadHandler);
+      existingScript.addEventListener('error', (e) => reject(e));
+      return;
     }
-
     const script = document.createElement('script');
     script.src = TWITCH_EMBED_SCRIPT_URL;
     script.addEventListener('load', () => resolve());
@@ -45,25 +43,26 @@ const loadTwitchEmbedScript = (): Promise<void> => {
   });
 };
 
-
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ twitchContent, theme, hostname }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ twitchContent, theme, hostname, playerMode }) => {
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const playerInstanceRef = useRef<any>(null);
 
   useEffect(() => {
-    // Do not proceed if there is no hostname or content, or if content is a clip (handled by iframe)
-    if (!hostname || !twitchContent || twitchContent.type === 'clip') {
+    // Logic for the full "Embed" player
+    const isFullMode = playerMode === 'full' && twitchContent && twitchContent.type !== 'clip';
+    
+    if (!hostname || !isFullMode) {
       if (playerInstanceRef.current && playerContainerRef.current) {
         playerContainerRef.current.innerHTML = '';
         playerInstanceRef.current = null;
       }
       return;
     }
-
+    
     let isMounted = true;
 
     const initializePlayer = () => {
-      if (!isMounted || !playerContainerRef.current) return;
+      if (!isMounted || !playerContainerRef.current || !twitchContent) return;
       
       playerContainerRef.current.innerHTML = '';
 
@@ -73,19 +72,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ twitchContent, theme, hostnam
         parent: [hostname],
         autoplay: true,
         muted: false,
-        layout: 'video', // Use 'video' layout to hide chat
-        theme: theme, // Sync theme with the app
+        theme: theme,
       };
 
       let playerOptions;
       if (twitchContent.type === 'channel') {
-        playerOptions = { ...commonOptions, channel: twitchContent.id };
+        playerOptions = { ...commonOptions, channel: twitchContent.id, layout: 'video-with-chat' };
       } else if (twitchContent.type === 'video') {
-         playerOptions = { ...commonOptions, video: twitchContent.id };
+         playerOptions = { ...commonOptions, video: twitchContent.id, layout: 'video' };
       }
 
       if (playerOptions) {
-        // Use the new Twitch.Embed class
         playerInstanceRef.current = new window.Twitch.Embed(playerContainerRef.current, playerOptions);
       }
     };
@@ -98,15 +95,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ twitchContent, theme, hostnam
       isMounted = false;
     };
 
-  }, [twitchContent, theme, hostname]);
-
+  }, [twitchContent, theme, hostname, playerMode]);
 
   if (!twitchContent) {
     return null;
   }
 
-  // CRITICAL FIX: Wait for hostname before attempting to render the player.
-  // This prevents the race condition where an empty `parent` is sent to Twitch.
   if (!hostname) {
     return (
         <div className="w-full max-w-4xl">
@@ -115,41 +109,44 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ twitchContent, theme, hostnam
                     Detecting environment...
                 </p>
             </div>
-            <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900/50 border border-yellow-300 dark:border-yellow-700 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 text-center font-mono">
-                <p>
-                    <strong>Diagnostic Info:</strong> Waiting for parent domain...
-                </p>
-            </div>
       </div>
     );
   }
+
+  const getMinimalPlayerSrc = () => {
+    if (!twitchContent) return '';
+    const baseParams = `parent=${hostname}&autoplay=true&muted=false`;
+    switch(twitchContent.type) {
+      case 'channel':
+        return `https://player.twitch.tv/?channel=${twitchContent.id}&${baseParams}`;
+      case 'video':
+        // VODs require a 'v' prefix
+        return `https://player.twitch.tv/?video=v${twitchContent.id}&${baseParams}`;
+      case 'clip':
+         return `https://clips.twitch.tv/embed?clip=${twitchContent.id}&parent=${hostname}&autoplay=true`;
+      default:
+        return '';
+    }
+  };
+
+  const showFullPlayer = playerMode === 'full' && twitchContent.type !== 'clip';
   
   return (
-    <div className="w-full max-w-4xl">
+    <div className="w-full">
       <div className="relative w-full aspect-video bg-black rounded-3xl overflow-hidden border-4 border-gray-200/20 dark:border-gray-700/40">
-        {twitchContent.type === 'clip' ? (
+        {showFullPlayer ? (
+          <div ref={playerContainerRef} className="w-full h-full" />
+        ) : (
           <iframe
-            key={`clip-${twitchContent.id}`}
-            src={`https://clips.twitch.tv/embed?clip=${twitchContent.id}&parent=${hostname}&autoplay=true`}
-            title="Twitch Clip Player"
+            key={twitchContent.id + playerMode}
+            src={getMinimalPlayerSrc()}
+            title="Twitch Player"
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
             className="w-full h-full"
           ></iframe>
-        ) : (
-          // This div will be populated by the Twitch.Embed script
-          <div ref={playerContainerRef} className="w-full h-full" />
         )}
-      </div>
-       <div className="mt-4 p-3 bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700 rounded-lg text-sm text-green-800 dark:text-green-200 text-center font-mono">
-          <p>
-              <strong>Diagnostic Info:</strong> Attempting to embed for parent domain:
-              <br />
-              <code className="bg-green-200 dark:bg-green-800 p-1 rounded">
-                  {hostname}
-              </code>
-          </p>
       </div>
     </div>
   );

@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Theme } from './types';
+import { Theme, PlayerMode } from './types';
 import Header from './components/Header';
 import InputBar from './components/InputBar';
 import VideoPlayer from './components/VideoPlayer';
 import ThemeToggle from './components/ThemeToggle';
+import PlayerModeToggle from './components/PlayerModeToggle';
 
 export interface TwitchInfo {
   type: 'channel' | 'video' | 'clip';
@@ -12,6 +13,7 @@ export interface TwitchInfo {
 
 const App: React.FC = () => {
   const [theme, setTheme] = useState<Theme>('light');
+  const [playerMode, setPlayerMode] = useState<PlayerMode>('minimal');
   const [twitchContent, setTwitchContent] = useState<TwitchInfo | null>(null);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [hostname, setHostname] = useState<string>('');
@@ -52,6 +54,10 @@ const App: React.FC = () => {
 
   const toggleTheme = useCallback(() => {
     setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
+  }, []);
+
+  const togglePlayerMode = useCallback(() => {
+    setPlayerMode((prevMode) => (prevMode === 'minimal' ? 'full' : 'minimal'));
   }, []);
   
   const extractTwitchInfo = (url: string): TwitchInfo | null => {
@@ -120,10 +126,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 font-sans">
-      <div className="absolute top-6 right-6">
+      <div className="absolute top-6 right-6 flex items-center space-x-2">
+        <PlayerModeToggle playerMode={playerMode} togglePlayerMode={togglePlayerMode} disabled={twitchContent?.type === 'clip' || twitchContent?.type === 'video'}/>
         <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
       </div>
-      <main className="w-full max-w-4xl flex flex-col items-center space-y-6 sm:space-y-8">
+      <main className={`w-full flex flex-col items-center space-y-6 sm:space-y-8 ${
+          playerMode === 'full' && twitchContent?.type === 'channel' ? 'max-w-7xl' : 'max-w-4xl'
+        } transition-all duration-500`}>
         <Header />
         <div className="w-full max-w-2xl p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-xl rounded-3xl border border-gray-200/50 dark:border-gray-700/50 transition-all duration-500">
           <InputBar onSubmit={handleUrlSubmit} onInputChange={handleInputChange} hasError={!!urlError} />
@@ -133,7 +142,12 @@ const App: React.FC = () => {
             </p>
           )}
         </div>
-        <VideoPlayer twitchContent={twitchContent} theme={theme} hostname={hostname} />
+        <VideoPlayer 
+          twitchContent={twitchContent} 
+          theme={theme} 
+          hostname={hostname} 
+          playerMode={playerMode}
+        />
       </main>
     </div>
   );
